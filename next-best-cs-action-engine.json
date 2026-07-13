@@ -1,0 +1,632 @@
+{
+  "name": "Next Best CS Action Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "id": "b15caf8e-6a66-4b32-a95a-18e1c745496b",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "company",
+        "operation": "getAll",
+        "options": {
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "name",
+                "company_id",
+                "domain",
+                "primary_contact_name",
+                "contact_email",
+                "renewal_date",
+                "renewal_stage",
+                "arr",
+                "health_status",
+                "cs_notes"
+              ]
+            }
+          }
+        }
+      },
+      "id": "e6c2ced3-915a-4400-ab4a-7fabe176d26c",
+      "name": "Get HubSpot Companies",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "HubSpot OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function getVal(obj, key) {\n  if (!obj || !key) return '';\n  if (typeof obj[key] === 'object' && obj[key] !== null && 'value' in obj[key]) {\n    return obj[key].value;\n  }\n  return obj[key] ?? '';\n}\n\nfunction firstNonEmpty(...values) {\n  for (const v of values) {\n    if (v !== undefined && v !== null && String(v).trim() !== '') {\n      return v;\n    }\n  }\n  return '';\n}\n\nfunction extractMailboxAlias(email) {\n  const s = String(email || '').toLowerCase().trim();\n  const match = s.match(/\\+([^@]+)@gmail\\.com$/);\n  return match ? match[1].replace(/[^a-z0-9]/g, '') : '';\n}\n\nreturn items.map(item => {\n  const j = item.json;\n  const p = j.properties || {};\n\n  const hubspotCompanyId = firstNonEmpty(\n    j.companyId,\n    j.id,\n    j.hs_object_id,\n    getVal(p, 'hs_object_id')\n  );\n\n  const companyCode = firstNonEmpty(\n    getVal(p, 'company_id'),\n    getVal(p, 'company_code'),\n    getVal(p, 'company_code_id'),\n    getVal(p, 'client_id'),\n    getVal(p, 'customer_id'),\n    getVal(p, 'external_company_id')\n  );\n\n  const contactEmail = firstNonEmpty(\n    getVal(p, 'contact_email'),\n    getVal(p, 'Contact Email'),\n    ''\n  );\n\n  return {\n    json: {\n      hubspot_company_id: String(hubspotCompanyId || '').trim(),\n      company_id: String(companyCode || '').trim(),\n      mailbox_alias: extractMailboxAlias(contactEmail),\n      company_name: firstNonEmpty(\n        getVal(p, 'company_name'),\n        getVal(p, 'name'),\n        j.name\n      ),\n      domain: firstNonEmpty(\n        getVal(p, 'domain'),\n        ''\n      ),\n      contact_email: contactEmail,\n      primary_contact_name: firstNonEmpty(\n        getVal(p, 'primary_contact_name'),\n        ''\n      ),\n      renewal_date: firstNonEmpty(\n        getVal(p, 'renewal_date'),\n        ''\n      ),\n      renewal_stage: firstNonEmpty(\n        getVal(p, 'renewal_stage'),\n        ''\n      ),\n      arr: firstNonEmpty(\n        getVal(p, 'arr'),\n        j.amount,\n        0\n      ),\n      health_status: firstNonEmpty(\n        getVal(p, 'health_status'),\n        'unknown'\n      ),\n      cs_notes: firstNonEmpty(\n        getVal(p, 'cs_notes'),\n        ''\n      ),\n      // NOTE: verify this matches your actual HubSpot internal property name\n      usage_trend: firstNonEmpty(\n        getVal(p, 'usage_trend'),\n        getVal(p, 'product_usage_trend'),\n        ''\n      )\n    }\n  };\n});"
+      },
+      "id": "744ff50d-5348-4e65-9f1f-7b69d9da7da1",
+      "name": "Normalize HubSpot Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "ticket",
+        "operation": "getAll",
+        "additionalFields": {
+          "properties": [
+            "hs_ticket_id",
+            "company_id",
+            "hs_pipeline",
+            "content",
+            "hs_pipeline_stage",
+            "hs_ticket_priority",
+            "createdate"
+          ]
+        }
+      },
+      "id": "da2e4799-9824-4982-940e-b2810f469b99",
+      "name": "Get HubSpot Tickets",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        464,
+        208
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "HubSpot OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction getVal(obj, key) {\n  if (!obj || !obj[key]) return '';\n  if (typeof obj[key] === 'object' && obj[key] !== null) {\n    if ('value' in obj[key]) return obj[key].value;\n    if (obj[key].versions && obj[key].versions[0] && 'value' in obj[key].versions[0]) {\n      return obj[key].versions[0].value;\n    }\n  }\n  return obj[key];\n}\n\nconst grouped = {};\n\nfor (const item of items) {\n  const j = item.json;\n  const p = j.properties || {};\n\n  const id = getVal(p, 'company_id') || j.company_id || '';\n  if (!id) continue;\n\n  if (!grouped[id]) {\n    grouped[id] = {\n      company_id: id,\n      open_ticket_count: 0,\n      highest_severity: 'None',\n      tickets_summary: []\n    };\n  }\n\n  grouped[id].open_ticket_count += 1;\n\n  const rank = { LOW: 1, MEDIUM: 2, HIGH: 3, URGENT: 4 };\n\n  const sevRaw = getVal(p, 'hs_ticket_priority') || 'LOW';\n  const sev = String(sevRaw).toUpperCase();\n\n  const subject = getVal(p, 'hs_ticket_id') || 'Untitled ticket';\n\n  if ((rank[sev] || 0) > (rank[grouped[id].highest_severity.toUpperCase()] || 0)) {\n    grouped[id].highest_severity = sevRaw;\n  }\n\n  grouped[id].tickets_summary.push(`${subject} (${sevRaw})`);\n}\n\nreturn Object.values(grouped).map(g => ({\n  json: {\n    ...g,\n    tickets_summary: g.tickets_summary.join(' | ')\n  }\n}));"
+      },
+      "id": "60d75432-13bb-4d98-9f8c-ec10c92ccaf5",
+      "name": "Aggregate Tickets by Company",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "simple": false,
+        "filters": {
+          "receivedAfter": "={{ $now.minus({days: 3}).toISO() }}"
+        },
+        "options": {},
+        "returnAll": true
+      },
+      "id": "6b7cff5d-22c1-4c1e-80f8-052f1c3c88c4",
+      "name": "Search Gmail Messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1184,
+        450
+      ],
+      "webhookId": "REPLACE_ON_IMPORT",
+      "executeOnce": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst companies = $items(\"Merge\");\n\nfunction getToAddress(j) {\n  const candidates = [];\n  if (j.to) candidates.push(j.to);\n  if (j.payload?.headers) {\n    const h = j.payload.headers.find(x => String(x.name).toLowerCase() === 'to');\n    if (h?.value) candidates.push(h.value);\n  }\n  for (const candidate of candidates) {\n    if (typeof candidate === 'string') return candidate;\n    if (candidate.address) return candidate.address;\n    if (Array.isArray(candidate.value) && candidate.value[0]?.address) return candidate.value[0].address;\n  }\n  return '';\n}\n\nfunction aliasFromTo(toValue) {\n  const m = String(toValue || '').toLowerCase().match(/\\+([^@>]+)@gmail\\.com/);\n  return m ? m[1].replace(/[^a-z0-9]/g, '') : '';\n}\n\nfunction getText(j) {\n  if (j.text && String(j.text).trim()) return String(j.text);\n  if (j.textAsHtml && String(j.textAsHtml).trim()) return String(j.textAsHtml);\n  if (j.html && String(j.html).trim()) return String(j.html).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (j.payload?.body?.data) return Buffer.from(j.payload.body.data, 'base64').toString('utf-8');\n  if (Array.isArray(j.payload?.parts)) {\n    const part = j.payload.parts.find(p => p.mimeType === 'text/plain') || j.payload.parts[0];\n    if (part?.body?.data) return Buffer.from(part.body.data, 'base64').toString('utf-8');\n  }\n  return j.snippet || '';\n}\n\nconst map = new Map(\n  companies\n    .map(c => [\n      String(c.json.mailbox_alias || '').toLowerCase().replace(/[^a-z0-9]/g, ''),\n      c.json.company_id || ''\n    ])\n    .filter(([k]) => k)\n);\n\nreturn items.map(item => {\n  const j = item.json;\n  const toValue = getToAddress(j);\n  const alias = aliasFromTo(toValue);\n  const companyId = map.get(alias) || '';\n\n  return {\n    json: {\n      company_id: companyId,\n      to: toValue,\n      from: j.from?.value?.[0]?.address || j.from?.address || j.from || '',\n      subject: j.subject || '',\n      date: j.date || '',\n      body_text: getText(j)\n    }\n  };\n});"
+      },
+      "id": "586a2e9b-1f52-4f1b-9ab9-55d5e25a0aaf",
+      "name": "Extract Full Email Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction getBodyText(s) {\n  return String(s || '').trim();\n}\n\nfunction extractMailText(item) {\n  const j = item.json;\n  return String(j.body_text || j.text || j.snippet || '');\n}\n\nfunction normalize(s) {\n  return String(s || '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '');\n}\n\nreturn items.map(item => {\n  const j = item.json;\n  const body = extractMailText(item);\n  const subject = String(j.subject || '');\n  const from = String(j.from || '');\n\n  return {\n    json: {\n      ...j,\n      subject,\n      from,\n      body_text: body,\n      body_norm: normalize(body),\n      subject_norm: normalize(subject),\n      from_norm: normalize(from),\n    }\n  };\n});"
+      },
+      "id": "989a7423-1efb-4d7a-907e-7e6ff7d48a2e",
+      "name": "Match Emails to Companies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst source=$('Match Emails to Companies').all();\nreturn items.map((item,i)=>{\n  let parsed;\n  try { parsed=JSON.parse(item.json.output[0].content[0].text); }\n  catch(e){ parsed={sentiment:'Parse error', concern:'Review manually', urgency_flag:'Medium'}; }\n  return {json:{...source[i].json, email_sentiment:parsed.sentiment, email_concern:parsed.concern, email_urgency_flag:parsed.urgency_flag}};\n});"
+      },
+      "id": "590d6543-fdb6-4982-bf0b-eb1711f2d9ac",
+      "name": "Parse Email Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction num(v, fallback = 0) {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : fallback;\n}\n\n// Small modifier from the day's email activity \u2014 context, not the primary driver.\nfunction emailModifier(flag, sentiment) {\n  const f = String(flag || '').toLowerCase();\n  let m = 0;\n  if (f === 'high') m += 30;\n  else if (f === 'medium') m += 15;\n\n  const s = String(sentiment || '').toLowerCase();\n  if (s.includes('negative')) m += 10;\n\n  return m;\n}\n\nconst ranked = items.map(item => {\n  const j = item.json;\n\n  const renewalProximity = num(j.renewal_proximity_score);\n  const healthRisk = num(j.health_risk_score);\n  const escalation = num(j.escalation_score);\n  const expansion = num(j.expansion_score);\n  const arr = num(j.arr);\n  const emailMod = emailModifier(j.email_urgency_flag, j.email_sentiment);\n\n  // Weighted by stated priority: renewal proximity > health/risk tier >\n  // open escalations > expansion signal. Email activity is a light modifier.\n  const overall_priority_score =\n    (renewalProximity * 5) +\n    (healthRisk * 3) +\n    (escalation * 2) +\n    (expansion * 1) +\n    emailMod;\n\n  return {\n    json: {\n      ...j,\n      overall_priority_score,\n    }\n  };\n});\n\nranked.sort((a, b) => {\n  const sa = num(a.json.overall_priority_score);\n  const sb = num(b.json.overall_priority_score);\n  if (sb !== sa) return sb - sa;\n\n  const ta = num(a.json.arr);\n  const tb = num(b.json.arr);\n  return tb - ta;\n});\n\nreturn ranked.slice(0, 5).map((item, index) => ({\n  json: {\n    ...item.json,\n    priority_rank: index + 1,\n    run_date: item.json.run_date || new Date().toISOString().slice(0, 10),\n  }\n}));"
+      },
+      "id": "7298567e-bca2-4110-aece-400e1599da52",
+      "name": "Rank Top 5 Accounts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst source = $('Rank Top 5 Accounts').all();\n\nfunction extractText(j) {\n  return j.raw_ai_text\n    ?? j.output?.[0]?.content?.[0]?.text\n    ?? j.output?.content?.[0]?.text\n    ?? j.output_text\n    ?? '';\n}\n\nfunction parseJsonFromText(text) {\n  if (!text) return {};\n  const s = String(text).trim();\n  if (!s) return {};\n  try { return JSON.parse(s); } catch {}\n  const arrayMatch = s.match(/\\[[\\s\\S]*\\]/);\n  if (arrayMatch) {\n    try { return JSON.parse(arrayMatch[0]); } catch {}\n  }\n  const objMatch = s.match(/\\{[\\s\\S]*\\}/);\n  if (objMatch) {\n    try { return JSON.parse(objMatch[0]); } catch {}\n  }\n  return {};\n}\n\nfunction first(v, fallback = '') {\n  return v === undefined || v === null || String(v).trim() === '' ? fallback : v;\n}\n\n// The AI node's own output replaces each item's json \u2014 it does not carry\n// forward company_name/company_id/email_sentiment/overall_priority_score\n// from before the AI call. Pull those back in from Rank Top 5 Accounts by\n// index (same pattern Parse Email Analysis uses for the other AI node).\nreturn items.map((item, i) => {\n  const j = item.json;\n  const base = source[i] ? source[i].json : {};\n\n  const raw = extractText(j);\n  const parsed = parseJsonFromText(raw);\n  const entry = Array.isArray(parsed) ? (parsed[0] || {}) : parsed;\n\n  return {\n    json: {\n      ...base,\n      company_name: first(base.company_name),\n      company_id: first(base.company_id),\n      email_sentiment: first(base.email_sentiment),\n      overall_priority_score: first(base.overall_priority_score),\n      priority_rank: first(base.priority_rank, entry.rank),\n      parsed_priority: first(entry.priority ?? entry.sentiment ?? entry.urgency_flag),\n      parsed_reason: first(entry.why_today ?? entry.reason ?? entry.concern),\n      parsed_action: first(entry.recommended_action ?? entry.action),\n      raw_ai_text: raw,\n    }\n  };\n});"
+      },
+      "id": "2a403fbd-6abe-4b19-b1a5-cad5d751ad37",
+      "name": "Parse AI Priority Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_CHANNEL_ID",
+          "mode": "list",
+          "cachedResultName": "your-slack-channel"
+        },
+        "text": "={{$json.message}}",
+        "otherOptions": {}
+      },
+      "id": "8db676c8-25b2-4c11-8431-b02105384c2e",
+      "name": "Slack Post",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        4064,
+        0
+      ],
+      "webhookId": "REPLACE_ON_IMPORT",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Slack OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chat-latest",
+          "mode": "list",
+          "cachedResultName": "CHAT-LATEST"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Customer Success email urgency classifier.\n\nClassify each email into exactly one urgency flag:\n- High: requires action today or poses immediate risk\n- Medium: action needed within 1\u20137 days\n- Low: no action needed today\n\nHigh urgency triggers:\n- cancellation, churn, renewal at risk, blocked, escalation, breach, outage, angry customer, deadline today, ASAP, urgent\n- customer asks for immediate help or there is a clear business impact now\n\nMedium urgency triggers:\n- follow up this week, pending approval, needs review, unanswered question, renewal coming soon, moderate risk\n\nLow urgency triggers:\n- FYI, heads up, routine update, next week, no rush, informational, status update only\n\nIf the email contains \u201cnothing urgent\u201d, \u201cno rush\u201d, \u201cnext week\u201d, or is a routine update, return Low.\nIf it includes any High trigger, return High even if the tone is polite.\nReturn ONLY valid JSON in exactly this format:\n{\"sentiment\":\"\",\"concern\":\"\",\"urgency_flag\":\"\"}"
+            },
+            {
+              "content": "=Company: {{ $json.company_name }}\n\nRaw email content:\n{{ $json.body_text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1904,
+        450
+      ],
+      "id": "90631126-cced-4095-a46d-0666bc73f634",
+      "name": "AI Email Content Analysis",
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chat-latest",
+          "mode": "list",
+          "cachedResultName": "CHAT-LATEST"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Customer Success prioritization assistant. For the top ranked accounts provided, explain in one sentence why each account should be prioritized today, referencing the specific ticket, email sentiment, email concern, or renewal timing details given. Then recommend one concrete next action that a CSM should take this week.\n\nReturn ONLY valid JSON in this exact shape:\n[{\"rank\":1,\"why_today\":\"\",\"recommended_action\":\"\"}]"
+            },
+            {
+              "content": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3344,
+        0
+      ],
+      "id": "5a75c7c4-3798-458d-b42c-8a962f1dc828",
+      "name": "AI Why + Action",
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "company_id",
+        "joinMode": "keepEverything",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        704,
+        0
+      ],
+      "id": "9977c801-bc18-45ce-aa9c-0ac11e989616",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction clean(v, fallback = '\u2014') {\n  if (v === undefined || v === null) return fallback;\n  const s = String(v).trim();\n  return s === '' ? fallback : s;\n}\n\nfunction pick(...vals) {\n  for (const v of vals) {\n    if (v !== undefined && v !== null && String(v).trim() !== '') return v;\n  }\n  return '';\n}\n\nreturn [{\n  json: {\n    message: items.map(item => {\n      const j = item.json;\n\n      const company = pick(j.company_name, j.company_id);\n      const why = pick(j.parsed_reason, j.why_today, j.parsed_priority, j.raw_ai_text);\n      const action = pick(j.parsed_action, j.recommended_action);\n\n      return `\ud83d\udccb Rank: ${clean(j.priority_rank)} (score ${clean(j.overall_priority_score)})\nCompany: ${clean(company)}\nEmail sentiment: ${clean(j.email_sentiment)}\nWhy today: ${clean(why)}\nAction: ${clean(action)}`;\n    }).join('\\n\\n---\\n\\n')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3824,
+        0
+      ],
+      "id": "d1523ac3-ba71-44fe-8354-6cea586fe101",
+      "name": "Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction num(v, fallback = 0) {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : fallback;\n}\n\n// Renewal proximity: closer renewal = higher score. Overdue counts as max urgency.\nfunction renewalProximityScore(dateStr) {\n  if (!dateStr) return 0;\n  const renewal = new Date(dateStr);\n  if (isNaN(renewal.getTime())) return 0;\n  const now = new Date();\n  const daysToRenewal = Math.ceil((renewal - now) / 86400000);\n  if (daysToRenewal <= 30) return 100;\n  if (daysToRenewal <= 60) return 75;\n  if (daysToRenewal <= 90) return 50;\n  if (daysToRenewal <= 180) return 25;\n  return 5;\n}\n\n// Health / risk tier: worse health = higher score.\nfunction healthRiskScore(status) {\n  const v = String(status || '').toLowerCase().replace(/[^a-z]/g, '');\n  const map = { atrisk: 100, critical: 100, watch: 55, monitor: 55, healthy: 10, good: 10, unknown: 35 };\n  return map[v] ?? 35;\n}\n\n// Open escalations: ticket volume + highest severity.\nfunction escalationScore(count, severity) {\n  const sevMap = { LOW: 10, MEDIUM: 30, HIGH: 60, URGENT: 100, NONE: 0 };\n  const sevScore = sevMap[String(severity || 'NONE').toUpperCase()] ?? 0;\n  const countBonus = Math.min(num(count) * 8, 40);\n  return Math.min(sevScore + countBonus, 100);\n}\n\n// Expansion signal: rising usage = upsell opportunity.\n// NOTE: verify 'usage_trend' matches your actual HubSpot property values.\nfunction expansionScore(trend) {\n  const v = String(trend || '').toLowerCase();\n  if (v.includes('increas') || v.includes('grow') || v.includes('expand')) return 80;\n  if (v.includes('stable') || v.includes('flat')) return 20;\n  return 0;\n}\n\nreturn items.map(item => {\n  const j = item.json;\n  return {\n    json: {\n      ...j,\n      renewal_proximity_score: renewalProximityScore(j.renewal_date),\n      health_risk_score: healthRiskScore(j.health_status),\n      escalation_score: escalationScore(j.open_ticket_count, j.highest_severity),\n      expansion_score: expansionScore(j.usage_trend),\n    }\n  };\n});"
+      },
+      "id": "c4f55547-96d2-4d28-97d8-5b5fedd3b702",
+      "name": "Compute Account Risk Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst urgencyRank = { high: 3, medium: 2, low: 1 };\n\nconst byCompany = {};\n\nfor (const item of items) {\n  const j = item.json;\n  const companyId = String(j.company_id || '').trim();\n  if (!companyId) continue; // no matching account for this email \u2014 drop it\n\n  const rank = urgencyRank[String(j.email_urgency_flag || '').toLowerCase()] || 0;\n  const existing = byCompany[companyId];\n\n  if (!existing) {\n    byCompany[companyId] = { ...j, company_id: companyId, _rank: rank };\n    continue;\n  }\n\n  const existingDate = new Date(existing.date || 0).getTime();\n  const currentDate = new Date(j.date || 0).getTime();\n\n  if (rank > existing._rank || (rank === existing._rank && currentDate > existingDate)) {\n    byCompany[companyId] = { ...j, company_id: companyId, _rank: rank };\n  }\n}\n\nreturn Object.values(byCompany).map(j => {\n  const { _rank, ...rest } = j;\n  return { json: rest };\n});"
+      },
+      "id": "cec23eb3-c576-47fe-9935-d70da38adcff",
+      "name": "Aggregate Email Signals by Company",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "company_id",
+        "joinMode": "keepEverything",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2624,
+        0
+      ],
+      "id": "fe3fcb58-196f-4b61-8146-59a00a437a7a",
+      "name": "Enrich Accounts With Email Signals"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items\n  .filter(item => item.json.company_name !== undefined) // keep only real accounts\n  .map(item => {\n    const j = item.json;\n    return {\n      json: {\n        ...j,\n        email_sentiment: j.email_sentiment || 'None',\n        email_urgency_flag: j.email_urgency_flag || 'Low',\n        email_concern: j.email_concern || 'No recent email activity',\n      }\n    };\n  });"
+      },
+      "id": "66d44af0-f736-46a0-abb1-e7cc6ea6a5f3",
+      "name": "Apply Email Defaults",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get HubSpot Companies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get HubSpot Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HubSpot Companies": {
+      "main": [
+        [
+          {
+            "node": "Normalize HubSpot Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HubSpot Tickets": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Tickets by Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize HubSpot Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Tickets by Company": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Search Gmail Messages": {
+      "main": [
+        [
+          {
+            "node": "Extract Full Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Full Email Body": {
+      "main": [
+        [
+          {
+            "node": "Match Emails to Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Analysis": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Email Signals by Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Priority Output": {
+      "main": [
+        [
+          {
+            "node": "Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Emails to Companies": {
+      "main": [
+        [
+          {
+            "node": "AI Email Content Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Email Content Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank Top 5 Accounts": {
+      "main": [
+        [
+          {
+            "node": "AI Why + Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Why + Action": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Priority Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Compute Account Risk Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message": {
+      "main": [
+        [
+          {
+            "node": "Slack Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Account Risk Scores": {
+      "main": [
+        [
+          {
+            "node": "Search Gmail Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Enrich Accounts With Email Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Email Signals by Company": {
+      "main": [
+        [
+          {
+            "node": "Enrich Accounts With Email Signals",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Enrich Accounts With Email Signals": {
+      "main": [
+        [
+          {
+            "node": "Apply Email Defaults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Email Defaults": {
+      "main": [
+        [
+          {
+            "node": "Rank Top 5 Accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8b68463bbfd8ef34d94eae6d21a4008e4629346bb4d080a4e493209aadf77a97"
+  },
+  "nodeGroups": [],
+  "id": "REPLACE_ON_IMPORT",
+  "tags": []
+}
