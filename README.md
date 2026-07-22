@@ -1,6 +1,6 @@
 # Next Best CS Action Engine
 
-An n8n workflow that scans a full book of 30–60 customer accounts every morning and outputs the top 5 to focus on today — each with a specific, explainable recommended action, not a generic "reach out".
+An n8n workflow that scans a full book of 30–60 customer accounts every morning and outputs the top 5 to focus on today, each with a specific, explainable recommended action, not a generic "reach out".
 
 Built to solve a real problem: without prioritization, a CSM's attention defaults to whoever emailed most recently, not whoever actually needs help most. The accounts most likely to churn quietly are often the ones generating *no* signal at all (no ticket, no email) just a renewal getting closer while nobody's looking.
 
@@ -36,7 +36,7 @@ Built to solve a real problem: without prioritization, a CSM's attention default
 
 ## Why this exists
 
-I put this together as part of my Customer Success portfolio, to work through what "AI-fluent, automation-minded CSM" actually looks like in practice rather than as a buzzword — including the debugging, not just the demo. See [`docs/debugging-notes.md`](https://github.com/nkatsia/next-best-cs-action-engine/blob/main/debugging-notes.md) for two real correctness bugs I found and fixed after the first version looked like it was working.
+I put this together as part of my Customer Success portfolio, to work through what "AI-fluent, automation-minded CSM" actually looks like in practice rather than as a buzzword, including the debugging, not just the demo. See [`docs/debugging-notes.md`](https://github.com/nkatsia/next-best-cs-action-engine/blob/main/debugging-notes.md) for two real correctness bugs I found and fixed after the first version looked like it was working.
 
 ## Tech stack
 
