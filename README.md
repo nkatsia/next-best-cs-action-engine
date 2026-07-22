@@ -4,7 +4,7 @@ An n8n workflow that scans a full book of 30–60 customer accounts every mornin
 
 Built to solve a real problem: without prioritization, a CSM's attention defaults to whoever emailed most recently, not whoever actually needs help most. The accounts most likely to churn quietly are often the ones generating *no* signal at all (no ticket, no email) just a renewal getting closer while nobody's looking.
 
-📄 Full write-up with the "why" behind the design decisions: **[Case study →](#)**
+📄 Full write-up with the "why" behind the design decisions: **[Case study →](https://scratched-swordtail-ecc.notion.site/Next-Best-CS-Action-Engine-39c6c11cc7808018b358d7e992fe8aed)**
 
 ## How it works
 
