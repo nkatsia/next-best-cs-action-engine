@@ -9,7 +9,7 @@ Built to solve a real problem: without prioritization, a CSM's attention default
 ## How it works
 
 1. **Merge account data.** Pull companies and open tickets from HubSpot and combine them into one record per account — ARR, renewal date, health tier, open ticket count and severity.
-2. **Score each account.** A rules layer (not the AI) converts those raw fields into four 0–100 scores — renewal proximity, health/risk tier, open escalations, expansion signal — see [`code/03-compute-account-risk-scores.js`](code/03-compute-account-risk-scores.js).
+2. **Score each account.** A rules layer (not the AI) converts those raw fields into four 0–100 scores — renewal proximity, health/risk tier, open escalations, expansion signal — see [`code/03-compute-account-risk-scores.js`](https://github.com/nkatsia/next-best-cs-action-engine/blob/main/03-compute-account-risk-scores.js).
 3. **Enrich with email signal.** Recent inbound emails are classified for urgency/sentiment by an LLM, then **left-joined** onto the full account list, so an account with no recent email still gets ranked on its underlying risk — it isn't dropped for having gone quiet.
 4. **Rank.** The four scores are combined into a single weighted priority score (weights match the order above) — see [`code/08-rank-top-5-accounts.js`](code/08-rank-top-5-accounts.js) — and the top 5 are kept.
 5. **Explain.** A second LLM call writes a one-line "why this, why now" and a specific recommended action for each of the top 5, referencing the actual signal (the ticket number, the renewal date, the email complaint) rather than a generic nudge.
